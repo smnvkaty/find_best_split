@@ -1,0 +1,74 @@
+from collections import Counter
+from typing import Dict, List, Tuple, Union
+# В качестве меры хаотичности H(R) для задачи регрессии используется дисперсия подвыборки, а для задачи классификации – критерий Джини.
+
+def find_best_split(
+    feature_vector: Union[np.ndarray, pd.DataFrame], 
+    target_vector: Union[np.ndarray, pd.Series],
+    task: str = "classification",
+    feature_type: str = "real"
+) -> Tuple[np.ndarray, np.ndarray, float, float]:
+    """
+    :param feature_vector: вещественнозначный вектор значений признака
+    :param target_vector: вектор классов объектов,  len(feature_vector) == len(target_vector)
+    :param task: либо `classification`, либо `regression`, у нас классификация
+    :param feature_type: либо `real`, либо `categorical`, но мы посмотрим только на real
+    
+    :return thresholds: отсортированный по возрастанию вектор со всеми возможными порогами, по которым объекты можно
+     разделить на две различные подвыборки, или поддерева
+    :return Hs: вектор со значениями критерия информативности для каждого из порогов в thresholds len(Hs) == len(thresholds)
+    :return threshold_best: оптимальный порог (число)
+    :return H_best: оптимальное значение критерия информативности (число)
+    """
+    
+    feature_values = np.unique(feature_vector)
+    Q_array = []
+    threshold = []
+    if feature_type =="real":
+      if task == "regression":
+        for t in range(len(feature_values)- 1):
+          R_l = feature_vector[np.where(feature_vector < ((feature_values[t] + feature_values[t+1])/2))]
+          R_r = feature_vector[np.where(feature_vector >= ((feature_values[t] + feature_values[t+1])/2))]
+          target_l = target_vector[np.where(feature_vector < ((feature_values[t] + feature_values[t+1])/2))]
+          target_r = target_vector[np.where(feature_vector >= ((feature_values[t] + feature_values[t+1])/2))]
+          Q = len(R_l) / len(feature_vector) * target_l.var() + len(R_r) / len(feature_vector) * target_r.var()
+          threshold.append((feature_values[t] + feature_values[t+1])/2)
+          Q_array.append(Q)
+      elif task == "classification":
+        for t in range(len(feature_values)- 1):
+          R_l = feature_vector[np.where(feature_vector < ((feature_values[t] + feature_values[t+1])/2))]
+          R_r = feature_vector[np.where(feature_vector >= ((feature_values[t] + feature_values[t+1])/2))]
+          target_l = target_vector[np.where(feature_vector < ((feature_values[t] + feature_values[t+1])/2))]
+          target_r = target_vector[np.where(feature_vector >= ((feature_values[t] + feature_values[t+1])/2))]
+          target_l_freq = np.sum(np.unique(target_l, return_counts=True)[1] / len(target_l) * (1 - (np.unique(target_l, return_counts=True)[1] / len(target_l))))
+          target_r_freq = np.sum(np.unique(target_r, return_counts=True)[1] / len(target_r) * (1 - (np.unique(target_r, return_counts=True)[1] / len(target_r))))
+          Q = len(R_l) / len(feature_vector) * target_l_freq + len(R_r) / len(feature_vector) * target_r_freq
+          threshold.append((feature_values[t] + feature_values[t+1])/2)
+          Q_array.append(Q)
+    elif feature_type == "categorical":
+      if task == "regression":
+        for t in range(len(feature_values)):
+          R_l = feature_vector[np.where(feature_vector == feature_values[t])]
+          R_r = feature_vector[np.where(feature_vector != feature_values[t])]
+          target_l = target_vector[np.where(feature_vector == feature_values[t])]
+          target_r = target_vector[np.where(feature_vector != feature_values[t])]
+          Q = len(R_l) / len(feature_vector) * target_l.var() + len(R_r) / len(feature_vector) * target_r.var()
+          threshold.append(feature_values[t])
+          Q_array.append(Q)
+      elif task == "classification":
+        for t in range(len(feature_values)):
+          R_l = feature_vector[np.where(feature_vector == feature_values[t])]
+          R_r = feature_vector[np.where(feature_vector != feature_values[t])]
+          target_l = target_vector[np.where(feature_vector == feature_values[t])]
+          target_r = target_vector[np.where(feature_vector != feature_values[t])]
+          target_l_freq = np.sum(np.unique(target_l, return_counts=True)[1] / len(target_l) * (1 - (np.unique(target_l, return_counts=True)[1] / len(target_l))))
+          target_r_freq = np.sum(np.unique(target_r, return_counts=True)[1] / len(target_r) * (1 - (np.unique(target_r, return_counts=True)[1] / len(target_r))))
+          Q = len(R_l) / len(feature_vector) * target_l_freq + len(R_r) / len(feature_vector) * target_r_freq
+          threshold.append(feature_values[t])
+          Q_array.append(Q)
+
+    Q_array = np.nan_to_num(Q_array, nan=float("+inf"))
+    threshold_best = threshold[np.argmin(Q_array)]
+    gini_best = Q_array[np.argmin(Q_array)]
+
+    return threshold, Q_array, threshold_best, gini_best
